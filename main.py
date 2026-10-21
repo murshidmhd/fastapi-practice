@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 
+import sqlite3
+
 app = FastAPI()
+
+
+from pydantic import BaseModel
 
 
 @app.get("/")
@@ -8,78 +13,50 @@ def home():
     return {"message": "server is running"}
 
 
-import sqlite3
-
-
-def inot_db():
-    conn = sqlite3.connect("task_db")
+def init_db():
+    conn = sqlite3.connect("user_form_db")
     cursor = conn.cursor()
-    cursor.execute("""CREATE TABLE IF NOT EXISTS tasks(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    is_done INTEGER DEFAULT 0)""")
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL, email TEXT NOT NULL , message TEXT NOT NULL)"""
+    )
+
     conn.commit()
     conn.close()
 
 
-inot_db()
+init_db()
 
 
-from pydantic import BaseModel
+class UserData(BaseModel):
+    name: str
+    email: str
+    message: str
 
 
-class TaskInput(BaseModel):
-    title: str
-
-
-@app.post("/tasks/")
-def create_task(task: TaskInput):
-    conn = sqlite3.connect("task_db")
+@app.post("/user")
+def data_enter(data: UserData):
+    conn = sqlite3.connect("user_form_db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO tasks (title) VALUES  (?)", (task.title,))
+    cursor.execute(
+        "INSERT INTO user(name ,email, message) VALUES (?,?,?)",
+        (data.name, data.email, data.message),
+    )
+
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
 
-    return {"id": new_id, "title": task.title}
+    return {"id": new_id, "data": data}
 
 
-@app.get("/tasks/")
-def get_tasks():
-    conn = sqlite3.connect("task_db")
+@app.get("/users")
+def users():
+    conn = sqlite3.connect("user_form_db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id , title  , is_done FROM tasks")
-    row = cursor.fetchall()
+    print("in")
+    cursor.execute("SELECT id ,name , email , message FROM  user")
+    data = cursor.fetchall()
+    print(f"data is in here" , data)
     conn.close()
 
-    return [{"id": r[0], "title": r[1], "is_done": r[2]} for r in row]
-
-
-from fastapi import HTTPException
-
-
-@app.get("/tasks/{task_id}")
-def get_by_id(task_id: int):
-    conn = sqlite3.connect("task_db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, title, is_done FROM  tasks WHERE id = (?)", (task_id,))
-    row = cursor.fetchone()
-    conn.close()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="task not found")
-    return {"id": row[0], "title": row[1], "is_done": row[2]}
-
-
-@app.delete("/tasks/{task_id}")
-def delete_by_id(task_id:int):
-    conn = sqlite3.connect("task_db")
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM tasks WHERE id = (?)", (task_id,))
-    conn.commit()
-    deleted = cursor.rowcount
-    conn.close()
-
-    if deleted == 0:
-        raise HTTPException(status_code=404, detail="task not found")
-    return {"message": "task deleted"}
+    return [{"id": r[0], "name": r[1], "email": r[2], "message": r[3]} for r in data]
